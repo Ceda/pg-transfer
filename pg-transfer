@@ -2,6 +2,7 @@
 
 require 'optparse'
 require 'uri'
+require 'pry'
 
 class PgTransfer
   class << self
@@ -15,12 +16,14 @@ class PgTransfer
     def transfer
       options = {
         from: nil,
+        app: nil,
         to: nil,
         tables_include: "",
         tables_exclude: "",
       }
       OptionParser.new do |opts|
         opts.banner = "Usage: pg-transfer [options]"
+        opts.on('-a', '--app APP_NAME',               'Application name')    { |v| options[:app] = v }
         opts.on('-f', '--from URL',                   'Source database URL') { |v| options[:from] = v }
         opts.on('-t', '--to URL',                     'Target database URL') { |v| options[:to] = v }
         opts.on('-b', '--tables-include TABLES_LIST', 'Tables to copy, defaults to all') { |v| options[:tables_include] = v }
@@ -28,10 +31,14 @@ class PgTransfer
         o = opts
       end.parse!
 
+      options[:to] = transfer_database_url(options[:app])   if options[:app] && !options[:to]
+      options[:from] = transfer_database_url(options[:app]) if options[:app] && !options[:from]
+
       validate_options!(options)
 
       puts "Source database: #{transfer_pretty_name(options[:from])}"
       puts "Target database: #{transfer_pretty_name(options[:to])}"
+      puts "Target app: #{options[:app]}"
       puts "Are you sure? [y/n]"
       yn = gets.chomp
 
@@ -85,6 +92,10 @@ class PgTransfer
       %{ env PGPASSWORD=#{uri.password} pg_restore --verbose --clean --no-acl --no-owner #{user} -h #{host} -d #{database} -p #{port} }
     end
 
+    def transfer_database_url(app)
+      out = `heroku config:get DATABASE_URL --app #{app}`
+      out.strip
+    end
   end
 end
 
